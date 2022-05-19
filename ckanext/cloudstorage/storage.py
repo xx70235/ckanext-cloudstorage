@@ -1,36 +1,26 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import binascii
 import cgi
-import mimetypes
+import hashlib
 import logging
+import mimetypes
 import os
-import six
 import tempfile
-from six.moves.urllib.parse import urljoin
+import traceback
 from ast import literal_eval
 from datetime import datetime, timedelta
-import traceback
+from urllib.parse import urljoin
 
+import ckan.plugins as p
+import libcloud.common.types as types
 from ckan import model
 from ckan.lib import munge
-import ckan.plugins as p
-import hashlib
-import binascii
-
-from libcloud.storage.types import Provider, ObjectDoesNotExistError
 from libcloud.storage.providers import get_driver
-import libcloud.common.types as types
-
-if p.toolkit.check_ckan_version("2.9"):
-    from werkzeug.datastructures import FileStorage as UploadedFileType
-
-    config = p.toolkit.config
-else:
-    from pylons import config
-
-    UploadedFileType = cgi.FieldStorage
-
+from libcloud.storage.types import ObjectDoesNotExistError, Provider
 from werkzeug.datastructures import FileStorage as FlaskFileStorage
+
+config = p.toolkit.config
 
 log = logging.getLogger(__name__)
 
@@ -47,7 +37,7 @@ def _get_underlying_file(wrapper):
 def _md5sum(fobj):
     block_count = 0
     block = True
-    md5string = b''
+    md5string = b""
     while block:
         block = fobj.read(AWS_UPLOAD_PART_SIZE)
         if block:
@@ -65,12 +55,9 @@ def _md5sum(fobj):
 
 class CloudStorage(object):
     def __init__(self):
-        self.driver = get_driver(
-            getattr(
-                Provider,
-                self.driver_name
-            )
-        )(**self.driver_options)
+        self.driver = get_driver(getattr(Provider, self.driver_name))(
+            **self.driver_options
+        )
         self._container = None
 
     def path_from_filename(self, rid, filename):
@@ -94,7 +81,7 @@ class CloudStorage(object):
         A dictionary of options ckanext-cloudstorage has been configured to
         pass to the apache-libcloud driver.
         """
-        return literal_eval(config['ckanext.cloudstorage.driver_options'])
+        return literal_eval(config["ckanext.cloudstorage.driver_options"])
 
     @property
     def driver_name(self):
@@ -108,7 +95,7 @@ class CloudStorage(object):
             This value is used to lookup the apache-libcloud driver to use
             based on the Provider enum.
         """
-        return config['ckanext.cloudstorage.driver']
+        return config["ckanext.cloudstorage.driver"]
 
     @property
     def container_name(self):
@@ -116,7 +103,7 @@ class CloudStorage(object):
         The name of the container (also called buckets on some providers)
         ckanext-cloudstorage is configured to use.
         """
-        return config['ckanext.cloudstorage.container_name']
+        return config["ckanext.cloudstorage.container_name"]
 
     @property
     def use_secure_urls(self):
@@ -125,7 +112,7 @@ class CloudStorage(object):
         one-time URLs to resources, `False` otherwise.
         """
         return p.toolkit.asbool(
-            config.get('ckanext.cloudstorage.use_secure_urls', False)
+            config.get("ckanext.cloudstorage.use_secure_urls", False)
         )
 
     @property
@@ -136,7 +123,7 @@ class CloudStorage(object):
         otherwise `False`.
         """
         return p.toolkit.asbool(
-            config.get('ckanext.cloudstorage.leave_files', False)
+            config.get("ckanext.cloudstorage.leave_files", False)
         )
 
     @property
@@ -147,10 +134,11 @@ class CloudStorage(object):
         `False`.
         """
         # Are we even using Azure?
-        if self.driver_name == 'AZURE_BLOBS':
+        if self.driver_name == "AZURE_BLOBS":
             try:
                 # Yes? Is the azure-storage package available?
                 from azure import storage
+
                 # Shut the linter up.
                 assert storage
                 return True
@@ -166,14 +154,15 @@ class CloudStorage(object):
         been configured to use Amazon S3, otherwise `False`.
         """
         # Are we even using AWS?
-        if 'S3' in self.driver_name:
-            if 'host' not in self.driver_options:
+        if "S3" in self.driver_name:
+            if "host" not in self.driver_options:
                 # newer libcloud versions(must-use for python3)
                 # requires host for secure URLs
                 return False
             try:
                 # Yes? Is the boto package available?
                 import boto
+
                 # Shut the linter up.
                 assert boto
                 return True
@@ -189,7 +178,7 @@ class CloudStorage(object):
         `False` otherwise.
         """
         return p.toolkit.asbool(
-            config.get('ckanext.cloudstorage.guess_mimetype', False)
+            config.get("ckanext.cloudstorage.guess_mimetype", False)
         )
 
 
@@ -208,37 +197,37 @@ class ResourceCloudStorage(CloudStorage):
         self.file = None
         self.resource = resource
 
-        upload_field_storage = resource.pop('upload', None)
-        self._clear = resource.pop('clear_upload', None)
-        multipart_name = resource.pop('multipart_name', None)
+        upload_field_storage = resource.pop("upload", None)
+        self._clear = resource.pop("clear_upload", None)
+        multipart_name = resource.pop("multipart_name", None)
 
         # Check to see if a file has been provided
-        if isinstance(upload_field_storage, (ALLOWED_UPLOAD_TYPES)) and \
-                upload_field_storage.filename:
+        if (
+            isinstance(upload_field_storage, (ALLOWED_UPLOAD_TYPES))
+            and upload_field_storage.filename
+        ):
             self.filename = munge.munge_filename(upload_field_storage.filename)
             self.file_upload = _get_underlying_file(upload_field_storage)
-            resource['url'] = self.filename
-            resource['url_type'] = 'upload'
-            resource['last_modified'] = datetime.utcnow()
+            resource["url"] = self.filename
+            resource["url_type"] = "upload"
+            resource["last_modified"] = datetime.utcnow()
         elif multipart_name and self.can_use_advanced_aws:
             # This means that file was successfully uploaded and stored
             # at cloud.
             # Currently implemented just AWS version
-            resource['url'] = munge.munge_filename(multipart_name)
-            resource['url_type'] = 'upload'
-            resource['last_modified'] = datetime.utcnow()
-        elif self._clear and resource.get('id'):
+            resource["url"] = munge.munge_filename(multipart_name)
+            resource["url_type"] = "upload"
+            resource["last_modified"] = datetime.utcnow()
+        elif self._clear and resource.get("id"):
             # Apparently, this is a created-but-not-commited resource whose
             # file upload has been canceled. We're copying the behaviour of
             # ckaenxt-s3filestore here.
-            old_resource = model.Session.query(
-                model.Resource
-            ).get(
-                resource['id']
+            old_resource = model.Session.query(model.Resource).get(
+                resource["id"]
             )
 
             self.old_filename = old_resource.url
-            resource['url_type'] = ''
+            resource["url_type"] = ""
 
     def path_from_filename(self, rid, filename):
         """
@@ -247,11 +236,7 @@ class ResourceCloudStorage(CloudStorage):
         :param rid: The resource ID.
         :param filename: The unmunged resource filename.
         """
-        return os.path.join(
-            'resources',
-            rid,
-            munge.munge_filename(filename)
-        )
+        return os.path.join("resources", rid, munge.munge_filename(filename))
 
     def upload(self, id, max_size=10):
         """
@@ -266,8 +251,7 @@ class ResourceCloudStorage(CloudStorage):
                 from azure.storage.blob.models import ContentSettings
 
                 blob_service = azure_blob.BlockBlobService(
-                    self.driver_options['key'],
-                    self.driver_options['secret']
+                    self.driver_options["key"], self.driver_options["secret"]
                 )
                 content_settings = None
                 if self.guess_mimetype:
@@ -278,35 +262,25 @@ class ResourceCloudStorage(CloudStorage):
                         )
                 return blob_service.create_blob_from_stream(
                     container_name=self.container_name,
-                    blob_name=self.path_from_filename(
-                        id,
-                        self.filename
-                    ),
+                    blob_name=self.path_from_filename(id, self.filename),
                     stream=self.file_upload,
-                    content_settings=content_settings
+                    content_settings=content_settings,
                 )
             else:
                 try:
                     file_upload = self.file_upload
-                    # in Python3 libcloud iterates over uploaded file,
-                    # while it's wrappend into non-iterator. So, pick real
-                    # file-object and give it to cloudstorage
-                    # if six.PY3:
-                    #    file_upload = file_upload._file
-
-                    # self.container.upload_object_via_stream(
-                    #     file_upload,
-                    #     object_name=self.path_from_filename(
-                    #         id,
-                    #         self.filename
-                    #     )
-                    # )
 
                     # check if already uploaded
                     object_name = self.path_from_filename(id, self.filename)
                     try:
-                        cloud_object = self.container.get_object(object_name=object_name)
-                        log.debug("\t Object found, checking size %s: %s", object_name, cloud_object.size)
+                        cloud_object = self.container.get_object(
+                            object_name=object_name
+                        )
+                        log.debug(
+                            "\t Object found, checking size %s: %s",
+                            object_name,
+                            cloud_object.size,
+                        )
                         if os.path.isfile(self.filename):
                             file_size = os.path.getsize(self.filename)
                         else:
@@ -314,25 +288,52 @@ class ResourceCloudStorage(CloudStorage):
                             file_size = self.file_upload.tell()
                             self.file_upload.seek(0, os.SEEK_SET)
 
-                        log.debug("\t - File size %s: %s", self.filename, file_size)
+                        log.debug(
+                            "\t - File size %s: %s", self.filename, file_size
+                        )
                         if file_size == int(cloud_object.size):
-                            log.debug("\t Size fits, checking hash %s: %s", object_name, cloud_object.hash)
-                            hash_file = hashlib.md5(self.file_upload.read()).hexdigest()
+                            log.debug(
+                                "\t Size fits, checking hash %s: %s",
+                                object_name,
+                                cloud_object.hash,
+                            )
+                            hash_file = hashlib.md5(
+                                self.file_upload.read()
+                            ).hexdigest()
                             self.file_upload.seek(0, os.SEEK_SET)
-                            log.debug("\t - File hash %s: %s", self.filename, hash_file)
+                            log.debug(
+                                "\t - File hash %s: %s",
+                                self.filename,
+                                hash_file,
+                            )
                             # basic hash
                             if hash_file == cloud_object.hash:
-                                log.debug("\t => File found, matching hash, skipping upload")
+                                log.debug(
+                                    "\t => File found, matching hash, skipping"
+                                    " upload"
+                                )
                                 return
                             # multipart hash
                             multi_hash_file = _md5sum(self.file_upload)
-                            log.debug("\t - File multi hash %s: %s", self.filename, multi_hash_file)
+                            log.debug(
+                                "\t - File multi hash %s: %s",
+                                self.filename,
+                                multi_hash_file,
+                            )
                             if multi_hash_file == cloud_object.hash:
-                                log.debug("\t => File found, matching hash, skipping upload")
+                                log.debug(
+                                    "\t => File found, matching hash, skipping"
+                                    " upload"
+                                )
                                 return
-                        log.debug("\t Resource found in the cloud but outdated, uploading")
+                        log.debug(
+                            "\t Resource found in the cloud but outdated,"
+                            " uploading"
+                        )
                     except ObjectDoesNotExistError:
-                        log.debug("\t Resource not found in the cloud, uploading")
+                        log.debug(
+                            "\t Resource not found in the cloud, uploading"
+                        )
 
                     # If it's temporary file, we'd better convert it
                     # into FileIO. Otherwise libcloud will iterate
@@ -349,8 +350,12 @@ class ResourceCloudStorage(CloudStorage):
                             file_upload_iter = file_upload._file
                     else:
                         file_upload_iter = iter(file_upload)
-                    self.container.upload_object_via_stream(iterator=file_upload_iter, object_name=object_name)
-                    log.debug("\t => UPLOADED %s: %s", self.filename, object_name)
+                    self.container.upload_object_via_stream(
+                        iterator=file_upload_iter, object_name=object_name
+                    )
+                    log.debug(
+                        "\t => UPLOADED %s: %s", self.filename, object_name
+                    )
                 except (ValueError, types.InvalidCredsError) as err:
                     log.error(traceback.format_exc())
                     raise err
@@ -361,10 +366,7 @@ class ResourceCloudStorage(CloudStorage):
             try:
                 self.container.delete_object(
                     self.container.get_object(
-                        self.path_from_filename(
-                            id,
-                            self.old_filename
-                        )
+                        self.path_from_filename(id, self.old_filename)
                     )
                 )
             except ObjectDoesNotExistError:
@@ -398,8 +400,7 @@ class ResourceCloudStorage(CloudStorage):
             from azure.storage import blob as azure_blob
 
             blob_service = azure_blob.BlockBlobService(
-                self.driver_options['key'],
-                self.driver_options['secret']
+                self.driver_options["key"], self.driver_options["secret"]
             )
 
             return blob_service.make_blob_url(
@@ -409,27 +410,32 @@ class ResourceCloudStorage(CloudStorage):
                     container_name=self.container_name,
                     blob_name=path,
                     expiry=datetime.utcnow() + timedelta(hours=1),
-                    permission=azure_blob.BlobPermissions.READ
-                )
+                    permission=azure_blob.BlobPermissions.READ,
+                ),
             )
         elif self.can_use_advanced_aws and self.use_secure_urls:
             from boto.s3.connection import S3Connection
-            os.environ['S3_USE_SIGV4'] = 'True'
+
+            os.environ["S3_USE_SIGV4"] = "True"
             s3_connection = S3Connection(
-                self.driver_options['key'],
-                self.driver_options['secret'],
-                host=self.driver_options['host']
+                self.driver_options["key"],
+                self.driver_options["secret"],
+                host=self.driver_options["host"],
             )
 
-            if 'region_name' in self.driver_options.keys():
-                s3_connection.auth_region_name = self.driver_options['region_name']
+            if "region_name" in self.driver_options.keys():
+                s3_connection.auth_region_name = self.driver_options[
+                    "region_name"
+                ]
 
-            generate_url_params = {"expires_in": 60 * 60,
-                                   "method": "GET",
-                                   "bucket": self.container_name,
-                                   "key": path}
+            generate_url_params = {
+                "expires_in": 60 * 60,
+                "method": "GET",
+                "bucket": self.container_name,
+                "key": path,
+            }
             if content_type:
-                generate_url_params['headers'] = {"Content-Type": content_type}
+                generate_url_params["headers"] = {"Content-Type": content_type}
             return s3_connection.generate_url_sigv4(**generate_url_params)
 
         # Find the object for the given key.
@@ -444,20 +450,20 @@ class ResourceCloudStorage(CloudStorage):
         try:
             return self.driver.get_object_cdn_url(obj)
         except NotImplementedError:
-            if 'S3' in self.driver_name:
+            if "S3" in self.driver_name:
                 return urljoin(
-                    'https://' + self.driver.connection.host,
-                    '{container}/{path}'.format(
+                    "https://" + self.driver.connection.host,
+                    "{container}/{path}".format(
                         container=self.container_name,
-                        path=six.ensure_str(path)
-                    )
+                        path=path,
+                    ),
                 )
             # This extra 'url' property isn't documented anywhere, sadly.
             # See azure_blobs.py:_xml_to_object for more.
-            elif 'url' in obj.extra:
-                return obj.extra['url']
+            elif "url" in obj.extra:
+                return obj.extra["url"]
             raise
 
     @property
     def package(self):
-        return model.Package.get(self.resource['package_id'])
+        return model.Package.get(self.resource["package_id"])

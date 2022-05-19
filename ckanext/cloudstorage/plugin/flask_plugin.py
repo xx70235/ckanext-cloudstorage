@@ -2,8 +2,8 @@
 
 import ckan.plugins as p
 
-from ckanext.cloudstorage.views import get_blueprints
 from ckanext.cloudstorage.cli import get_commands
+from ckanext.cloudstorage.views import get_blueprints
 
 
 class MixinPlugin(p.SingletonPlugin):
