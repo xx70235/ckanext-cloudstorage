@@ -56,3 +56,47 @@ class TestMultipartUpload(object):
         )
         assert result["commited"]
         assert storage.get_url_from_filename(res["id"], filename)
+
+    def test_upload_without_resource(self):
+        res = {"id": "random-id"}
+        filename = "file.txt"
+        multipart = helpers.call_action(
+            "cloudstorage_initiate_multipart",
+            id=res["id"],
+            name=filename,
+            size=1024 * 1024 * 5 * 2,
+        )
+        storage = ResourceCloudStorage(res)
+        assert (
+            storage.path_from_filename(res["id"], filename)
+            == multipart["name"]
+        )
+        assert storage.get_url_from_filename(res["id"], filename) is None
+
+        fp = BytesIO(b"b" * 1024 * 1024 * 5)
+        fp.seek(0)
+        helpers.call_action(
+            "cloudstorage_upload_multipart",
+            uploadId=multipart["id"],
+            partNumber=1,
+            upload=FakeFileStorage(fp, filename),
+        )
+
+        assert storage.get_url_from_filename(res["id"], filename) is None
+
+        fp = BytesIO(b"a" * 1024 * 1024 * 5)
+        fp.seek(0)
+        helpers.call_action(
+            "cloudstorage_upload_multipart",
+            uploadId=multipart["id"],
+            partNumber=2,
+            upload=FakeFileStorage(fp, filename),
+        )
+
+        assert storage.get_url_from_filename(res["id"], filename) is None
+
+        result = helpers.call_action(
+            "cloudstorage_finish_multipart", uploadId=multipart["id"]
+        )
+        assert result["commited"]
+        assert storage.get_url_from_filename(res["id"], filename)

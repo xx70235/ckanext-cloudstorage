@@ -15,10 +15,7 @@ from werkzeug.datastructures import FileStorage as FlaskFileStorage
 from ckanext.cloudstorage.model import MultipartPart, MultipartUpload
 from ckanext.cloudstorage.storage import ResourceCloudStorage
 
-if toolkit.check_ckan_version("2.9"):
-    config = toolkit.config
-else:
-    from pylons import config
+config = toolkit.config
 
 libcloud.security.VERIFY_SSL_CERT = True
 
