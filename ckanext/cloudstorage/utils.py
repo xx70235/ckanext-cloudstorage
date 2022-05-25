@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
+import mimetypes
 
 import os.path
 import tempfile
@@ -145,10 +146,10 @@ def resource_download(id, resource_id, filename=None):
 
     # if the client requests with a Content-Type header (e.g. Text preview)
     # we have to add the header to the signature
-    try:
-        content_type = getattr(tk.request, "content_type", None)
-    except AttributeError:
-        content_type = None
+    content_type = getattr(tk.request, "content_type", None)
+    if not content_type:
+        content_type, _enc = mimetypes.guess_type(filename)
+
     uploaded_url = upload.get_url_from_filename(
         resource["id"], filename, content_type=content_type
     )
