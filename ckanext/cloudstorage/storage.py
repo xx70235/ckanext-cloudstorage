@@ -376,24 +376,24 @@ class ResourceCloudStorage(CloudStorage):
                 return
 
     def get_url_from_filename(self, rid, filename, content_type=None):
+        path = self.path_from_filename(rid, filename)
+
+        return self.get_url_by_path(path, content_type)
+
+    def get_url_by_path(self, path, content_type=None):
         """
-        Retrieve a publically accessible URL for the given resource_id
-        and filename.
+        Retrieve a publically accessible URL for the given path
 
         .. note::
 
             Works for Azure and any libcloud driver that implements
             support for get_object_cdn_url (ex: AWS S3).
 
-        :param rid: The resource ID.
-        :param filename: The resource filename.
+        :param path: The resource name on cloud.
         :param content_type: Optionally a Content-Type header.
 
         :returns: Externally accessible URL or None.
         """
-        # Find the key the file *should* be stored at.
-        path = self.path_from_filename(rid, filename)
-
         # If advanced azure features are enabled, generate a temporary
         # shared access link instead of simply redirecting to the file.
         if self.can_use_advanced_azure and self.use_secure_urls:
