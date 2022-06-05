@@ -42,6 +42,7 @@ def _delete_multipart(upload, uploader):
         _get_object_url(uploader, upload.name) + "?uploadId=" + upload.id,
         method="DELETE",
     )
+
     if not resp.success():
         raise toolkit.ValidationError(resp.error)
 
@@ -75,7 +76,7 @@ def check_multipart(context, data_dict):
 
     """
 
-    h.check_access("cloudstorage_check_multipart", data_dict)
+    toolkit.check_access("cloudstorage_check_multipart", context, data_dict)
     id = toolkit.get_or_bust(data_dict, "id")
     try:
         upload = (
@@ -108,7 +109,7 @@ def initiate_multipart(context, data_dict):
 
     """
 
-    h.check_access("cloudstorage_initiate_multipart", data_dict)
+    toolkit.check_access("cloudstorage_initiate_multipart", context, data_dict)
     id, name, size = toolkit.get_or_bust(data_dict, ["id", "name", "size"])
     user_obj = model.User.get(context["user"])
     user_id = user_obj.id if user_obj else None
@@ -170,6 +171,7 @@ def initiate_multipart(context, data_dict):
         content_type, _ = mimetypes.guess_type(res_name)
         if content_type:
             headers = {"Content-type": content_type}
+
         upload_object = MultipartUpload(
             uploader.driver._initiate_multipart(
                 container=uploader.container,
@@ -188,7 +190,7 @@ def initiate_multipart(context, data_dict):
 
 
 def upload_multipart(context, data_dict):
-    h.check_access("cloudstorage_upload_multipart", data_dict)
+    toolkit.check_access("cloudstorage_upload_multipart", context, data_dict)
     upload_id, part_number, part_content = toolkit.get_or_bust(
         data_dict, ["uploadId", "partNumber", "upload"]
     )
@@ -224,7 +226,7 @@ def finish_multipart(context, data_dict):
 
     """
 
-    h.check_access("cloudstorage_finish_multipart", data_dict)
+    toolkit.check_access("cloudstorage_finish_multipart", context, data_dict)
     upload_id = toolkit.get_or_bust(data_dict, "uploadId")
     save_action = data_dict.get("save_action", False)
     upload = model.Session.query(MultipartUpload).get(upload_id)
@@ -269,7 +271,7 @@ def finish_multipart(context, data_dict):
 
 
 def abort_multipart(context, data_dict):
-    h.check_access("cloudstorage_abort_multipart", data_dict)
+    toolkit.check_access("cloudstorage_abort_multipart", context, data_dict)
     id = toolkit.get_or_bust(data_dict, ["id"])
 
     uploader = get_resource_uploader({"id": id})
@@ -300,7 +302,7 @@ def clean_multipart(context, data_dict):
 
     """
 
-    h.check_access("cloudstorage_clean_multipart", data_dict)
+    toolkit.check_access("cloudstorage_clean_multipart", context, data_dict)
     delta = _get_max_multipart_lifetime()
     oldest_allowed = datetime.datetime.utcnow() - delta
 
