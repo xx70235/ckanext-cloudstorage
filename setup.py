@@ -4,7 +4,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="ckanext-cloudstorage",
-    version="0.2.0",
+    version="0.2.1",
     description="Cloud storage for CKAN",
     classifiers=[],
     keywords="",
@@ -17,7 +17,7 @@ setup(
     include_package_data=True,
     zip_safe=False,
     install_requires=[
-        "apache-libcloud~=3.5",
+        "apache-libcloud~=3.6",
         "ckanapi",
     ],
     entry_points="""
