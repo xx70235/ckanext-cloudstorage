@@ -28,6 +28,16 @@ ALLOWED_UPLOAD_TYPES = (cgi.FieldStorage, FlaskFileStorage)
 AWS_UPLOAD_PART_SIZE = 5 * 1024 * 1024
 
 
+CONFIG_SECURE_TTL = "ckanext.cloudstorage.secure_ttl"
+DEFAULT_SECURE_TTL = 3600
+
+
+def config_secure_ttl():
+    return p.toolkit.asint(p.toolkit.config.get(
+        CONFIG_SECURE_TTL, DEFAULT_SECURE_TTL
+    ))
+
+
 def _get_underlying_file(wrapper):
     if isinstance(wrapper, FlaskFileStorage):
         return wrapper.stream
@@ -409,7 +419,7 @@ class ResourceCloudStorage(CloudStorage):
                 sas_token=blob_service.generate_blob_shared_access_signature(
                     container_name=self.container_name,
                     blob_name=path,
-                    expiry=datetime.utcnow() + timedelta(hours=1),
+                    expiry=datetime.utcnow() + timedelta(seconds=config_secure_ttl()),
                     permission=azure_blob.BlobPermissions.READ,
                 ),
             )
@@ -429,7 +439,7 @@ class ResourceCloudStorage(CloudStorage):
                 ]
 
             generate_url_params = {
-                "expires_in": 60 * 60,
+                "expires_in": config_secure_ttl(),
                 "method": "GET",
                 "bucket": self.container_name,
                 "key": path,
