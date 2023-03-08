@@ -65,9 +65,24 @@ def _md5sum(fobj):
 
 class CloudStorage(object):
     def __init__(self):
-        self.driver = get_driver(getattr(Provider, self.driver_name))(
-            **self.driver_options
-        )
+        key_id = "LTAI5tJoF9GCtdrFcEoVVL5k"
+        key_secret = "ylPlWY2VEzQOieo3rCe9nwhtugFLBD"
+
+        # self.driver = get_driver(getattr(Provider, self.driver_name))(
+        #     # **self.driver_options
+        #     key=key_id,secret=key_secret,host="china-vo-gw.oss-cn-hangzhou.aliyuncs.com"
+        # )
+        # "key":"LTAI5tJoF9GCtdrFcEoVVL5k","secret":"ylPlWY2VEzQOieo3rCe9nwhtugFLBD"
+        OSSDriver = get_driver(Provider.ALIYUN_OSS)
+
+        # your_access_key_id = "LTAI5tJoF9GCtdrFcEoVVL5k"
+        # your_access_key_secret = "ylPlWY2VEzQOieo3rCe9nwhtugFLBD"
+        oss = OSSDriver(key_id, key_secret,host="china-vo-gw.oss-cn-hangzhou.aliyuncs.com")
+        self.driver=oss
+        log.info("driver name is {}".format(self.driver))
+        # self._container = self.driver.get_container(
+        #         container_name="china-vo-gw"
+        #     )
         self._container = None
 
     def path_from_filename(self, rid, filename):
@@ -82,7 +97,10 @@ class CloudStorage(object):
             self._container = self.driver.get_container(
                 container_name=self.container_name
             )
+            log.info("container is {}".format(self._container))
 
+            # self._container.extra={"location":"oss-cn-hangzhou"}
+    
         return self._container
 
     @property
@@ -113,7 +131,8 @@ class CloudStorage(object):
         The name of the container (also called buckets on some providers)
         ckanext-cloudstorage is configured to use.
         """
-        return config["ckanext.cloudstorage.container_name"]
+        # return config["ckanext.cloudstorage.container_name"]
+        return "china-vo-gw"
 
     @property
     def use_secure_urls(self):
@@ -247,7 +266,8 @@ class ResourceCloudStorage(CloudStorage):
         :param filename: The unmunged resource filename.
         """
         return os.path.join("resources", rid, munge.munge_filename(filename))
-
+    
+    #主要修改这一部分
     def upload(self, id, max_size=10):
         """
         Complete the file upload, or clear an existing upload.
@@ -360,8 +380,9 @@ class ResourceCloudStorage(CloudStorage):
                             file_upload_iter = file_upload._file
                     else:
                         file_upload_iter = iter(file_upload)
-                    self.container.upload_object_via_stream(
-                        iterator=file_upload_iter, object_name=object_name
+                    log.info("container is {}".format(self.container))
+                    self.driver.upload_object_via_stream(
+                        iterator=file_upload_iter, container = self.container, object_name=object_name
                     )
                     log.debug(
                         "\t => UPLOADED %s: %s", self.filename, object_name
