@@ -6,6 +6,7 @@ from ckan import plugins
 from ckanext.cloudstorage import helpers, storage
 from ckanext.cloudstorage.logic.action import get_actions
 from ckanext.cloudstorage.logic.auth import get_auth_functions
+import oss2
 
 if plugins.toolkit.check_ckan_version("2.9"):
     from ckanext.cloudstorage.plugin.flask_plugin import MixinPlugin
@@ -110,8 +111,8 @@ class CloudStoragePlugin(MixinPlugin, plugins.SingletonPlugin):
                 uploader.path_from_filename(resource["id"], "fake-name")
             )
 
-            old_files = uploader.driver.iterate_container_objects(
-                uploader.container, upload_path
+            old_files = oss2.ObjectIterator(
+                uploader.container, prefix=upload_path
             )
 
             for old_file in old_files:
