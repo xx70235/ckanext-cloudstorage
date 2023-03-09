@@ -65,20 +65,13 @@ def _md5sum(fobj):
 
 class CloudStorage(object):
     def __init__(self):
-        key_id = "LTAI5tJoF9GCtdrFcEoVVL5k"
-        key_secret = "ylPlWY2VEzQOieo3rCe9nwhtugFLBD"
+       
 
-        # self.driver = get_driver(getattr(Provider, self.driver_name))(
-        #     # **self.driver_options
-        #     key=key_id,secret=key_secret,host="china-vo-gw.oss-cn-hangzhou.aliyuncs.com"
-        # )
-        # "key":"LTAI5tJoF9GCtdrFcEoVVL5k","secret":"ylPlWY2VEzQOieo3rCe9nwhtugFLBD"
-        OSSDriver = get_driver(Provider.ALIYUN_OSS)
-
-        # your_access_key_id = "LTAI5tJoF9GCtdrFcEoVVL5k"
-        # your_access_key_secret = "ylPlWY2VEzQOieo3rCe9nwhtugFLBD"
-        oss = OSSDriver(key_id, key_secret,host="china-vo-gw.oss-cn-hangzhou.aliyuncs.com")
-        self.driver=oss
+        self.driver = get_driver(getattr(Provider, self.driver_name))(
+            **self.driver_options
+          
+        )
+     
         log.info("driver name is {}".format(self.driver))
         # self._container = self.driver.get_container(
         #         container_name="china-vo-gw"
