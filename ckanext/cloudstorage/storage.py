@@ -449,11 +449,15 @@ class ResourceCloudStorage(CloudStorage):
         # Find the object for the given key.
         try:
             expiration_time = 3600
+
             url = self.container.sign_url('GET',path,expiration_time)
         except ObjectDoesNotExistError:
             return "404"
         if url is not None:
             return url
+    
+    def get_object_to_file(self, path, local_path):
+        return self.container.get_object_to_file(path,local_path)
 
       
 
