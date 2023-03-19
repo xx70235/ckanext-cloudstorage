@@ -21,6 +21,12 @@ from libcloud.storage.types import ObjectDoesNotExistError, Provider
 from werkzeug.datastructures import FileStorage as FlaskFileStorage
 import oss2
 from oss2.exceptions import NoSuchKey
+import mimetypes
+from ckanext.cloudstorage.ckan_dataset import CkanDataset
+from ckanext.cloudstorage.tiffimporter import import_tiffinfo_to_package
+from ckanext.cloudstorage.ncimporter import import_ncinfo_to_package
+from ckanapi import LocalCKAN
+from ckan.plugins import toolkit
 config = p.toolkit.config
 
 log = logging.getLogger(__name__)
@@ -74,11 +80,14 @@ class CloudStorage(object):
         # )
        
         endpoint = config["ckanext.cloudstorage.endpoint"]
+        download_enpoint = config["ckanext.cloudstorage.download.endpoint"]
         container_name = config["ckanext.cloudstorage.container_name"]
         key_secret = self.driver_options
         container = oss2.Bucket(oss2.Auth(key_secret['key'], key_secret['secret']), endpoint, container_name)
+        container_external =oss2.Bucket(oss2.Auth(key_secret['key'], key_secret['secret']), download_enpoint, container_name)
         log.info("container is {}".format(container))
         self._container = container
+        self._container_external = container_external
         self.driver= None
 
     def path_from_filename(self, rid, filename):
@@ -99,6 +108,20 @@ class CloudStorage(object):
             # self._container.extra={"location":"oss-cn-hangzhou"}
     
         return self._container
+    @property
+    def container_external(self):
+        """
+        Return the currently configured libcloud container for download.
+        """
+        # if self._container is None:
+        #     self._container = self.driver.get_container(
+        #         container_name=self.container_name
+        #     )
+        #     log.info("container is {}".format(self._container))
+
+            # self._container.extra={"location":"oss-cn-hangzhou"}
+    
+        return self._container_external
 
     @property
     def driver_options(self):
@@ -264,6 +287,8 @@ class ResourceCloudStorage(CloudStorage):
         """
         return os.path.join("resources", rid, munge.munge_filename(filename))
     
+    
+
     #主要修改这一部分
     def upload(self, id, max_size=10):
         """
@@ -272,14 +297,26 @@ class ResourceCloudStorage(CloudStorage):
         :param id: The resource_id.
         :param max_size: Ignored.
         """
+        
         if self.filename:
             log.info("filename is {}".format(self.filename))
+            # check the upload file type
+            mime_type, encoding = mimetypes.guess_type(self.filename)
+            package_id = self.package.id
+            # init an instance of ckan dataset class
+            # ckandataset = CkanDataset(package_id=package_id)
+            
+            # log.info("resource id is {}".format(id))
+            # log.info("package id is {}".format(self.package))
+            
+            log.info("mime_type is {}".format(mime_type))
+            
 
             try:
                 file_upload = self.file_upload
                 log.info("file_upload is {}".format(file_upload))
 
-                # check if already uploaded
+                
                 object_name = self.path_from_filename(id, self.filename)
                 log.info("object_name is {}".format(object_name))
                 try:
@@ -292,51 +329,8 @@ class ResourceCloudStorage(CloudStorage):
                         self.file_upload.seek(0, os.SEEK_END)
                         file_size = self.file_upload.tell()
                         self.file_upload.seek(0, os.SEEK_SET)
-
-
                     log.debug(
                         "\t - File size %s: %s", self.filename, file_size
-                    )
-                    
-                    #  check the file size and md5 
-                    # if file_size == int(cloud_object.size):
-                    #     log.debug(
-                    #         "\t Size fits, checking hash %s: %s",
-                    #         object_name,
-                    #         cloud_object.hash,
-                    #     )
-                    #     hash_file = hashlib.md5(
-                    #         self.file_upload.read()
-                    #     ).hexdigest()
-                    #     self.file_upload.seek(0, os.SEEK_SET)
-                    #     log.debug(
-                    #         "\t - File hash %s: %s",
-                    #         self.filename,
-                    #         hash_file,
-                    #     )
-                    #     # basic hash
-                    #     if hash_file == cloud_object.hash:
-                    #         log.debug(
-                    #             "\t => File found, matching hash, skipping"
-                    #             " upload"
-                    #         )
-                    #         return
-                    #     # multipart hash
-                    #     multi_hash_file = _md5sum(self.file_upload)
-                    #     log.debug(
-                    #         "\t - File multi hash %s: %s",
-                    #         self.filename,
-                    #         multi_hash_file,
-                    #     )
-                    #     if multi_hash_file == cloud_object.hash:
-                    #         log.debug(
-                    #             "\t => File found, matching hash, skipping"
-                    #             " upload"
-                    #         )
-                    #         return
-                    log.debug(
-                        "\t Resource found in the cloud but outdated,"
-                        " uploading"
                     )
                 except ObjectDoesNotExistError:
                     log.debug(
@@ -361,7 +355,10 @@ class ResourceCloudStorage(CloudStorage):
                         
                 else:
                     file_upload_iter = iter(file_upload)
-          
+
+              
+                # copy an fileio instance
+
 
                 # log.info("container is {}".format(self.container))
                 # self.driver.upload_object_via_stream(
@@ -397,11 +394,27 @@ class ResourceCloudStorage(CloudStorage):
                 # with self.file_upload.read() as fileobj:
                 # assert self.container.get_object(key).read() == fileobj.read()
 
+                log.info("here")
 
                 # os.remove(self.filename)
                 log.debug(
                     "\t => UPLOADED %s: %s", self.filename, object_name
                 )
+                lc = LocalCKAN()
+                lc.action.resource_patch(id=id,size=file_size)
+                  # update package extra info
+                if mime_type == 'image/tiff':
+                    file_upload_iter.seek(0)
+                    # log.info("file upload iter file type is {}".format(file_upload_iter))
+                    import_tiffinfo_to_package(package_id= package_id,resource_id=id, file=file_upload_iter)
+                    
+                elif mime_type == "application/x-netcdf":
+                    log.info("file upload iter file type is {}".format(file_upload_iter))
+                    file_upload_iter.seek(0)
+                    import_ncinfo_to_package(package_id= package_id,resource_id=id, file=file_upload_iter)
+                    log.info("done")
+                
+                # ckandataset.PatchResource(id, file_size)
             except (ValueError, types.InvalidCredsError) as err:
                 log.error(traceback.format_exc())
                 raise err
@@ -449,17 +462,19 @@ class ResourceCloudStorage(CloudStorage):
         # Find the object for the given key.
         try:
             expiration_time = 3600
-
-            url = self.container.sign_url('GET',path,expiration_time)
+            
+            url = self.container_external.sign_url('GET',path,expiration_time)
         except ObjectDoesNotExistError:
             return "404"
         if url is not None:
             return url
     
     def get_object_to_file(self, path, local_path):
+        
         return self.container.get_object_to_file(path,local_path)
 
-      
+
+
 
     @property
     def package(self):
